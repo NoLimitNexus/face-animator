@@ -342,9 +342,9 @@ function predictWebcam() {
                 // Use index 9 (Middle Finger MCP) as the center of the hand
                 const lm = landmarks[9];
                 
-                // Map to ThreeJS space (invert axes to fix backward direction)
-                const x = (lm.x - 0.5) * 40;
-                const y = (lm.y - 0.5) * 30;
+                // Map to ThreeJS space
+                const x = -(lm.x - 0.5) * 40;
+                const y = -(lm.y - 0.5) * 30;
                 // keep z relative naturally
                 const z = -lm.z * 50;
 
