@@ -140,8 +140,8 @@ select option {
 /* Video Feed container */
 .video-container {
   position: absolute;
-  bottom: 2rem;
-  right: 2rem;
+  top: 2rem;
+  left: 25rem; /* Pushed further to prevent overlap with the UI panel */
   width: 240px;
   height: 180px;
   z-index: 10;
@@ -187,7 +187,9 @@ select option {
     min-width: 0;
   }
   .video-container {
-    bottom: 1rem;
+    bottom: unset;
+    top: 1rem;
+    left: unset;
     right: 1rem;
     width: 160px;
     height: 120px;

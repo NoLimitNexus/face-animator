@@ -1,8 +1,9 @@
 import './style.css';
 import * as THREE from 'three';
-import { FaceLandmarker, FilesetResolver } from '@mediapipe/tasks-vision';
+import { FaceLandmarker, HandLandmarker, FilesetResolver } from '@mediapipe/tasks-vision';
 
 let faceLandmarker;
+let handLandmarker;
 let runningMode = "VIDEO";
 let webcamRunning = false;
 const video = document.getElementById("webcam");
@@ -42,8 +43,10 @@ const botMouthGroup = new THREE.Group();
 botMouthGroup.position.set(0, -1, 2.05);
 const botMouth = new THREE.Mesh(new THREE.PlaneGeometry(2, 0.2), new THREE.MeshBasicMaterial({color: 0x000000}));
 botMouthGroup.add(botMouth);
-robotGroup.add(botHead, botEyeL, botEyeR, botMouthGroup);
-avatars.robot = { root: robotGroup, mouth: botMouth, eyeL: botEyeL, eyeR: botEyeR };
+const botHandL = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.5, 1.5), new THREE.MeshStandardMaterial({color: 0x888888, metalness: 0.8, roughness: 0.2}));
+const botHandR = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.5, 1.5), new THREE.MeshStandardMaterial({color: 0x888888, metalness: 0.8, roughness: 0.2}));
+robotGroup.add(botHead, botEyeL, botEyeR, botMouthGroup, botHandL, botHandR);
+avatars.robot = { root: robotGroup, mouth: botMouth, eyeL: botEyeL, eyeR: botEyeR, handL: botHandL, handR: botHandR };
 
 // 2. Alien
 const alienGroup = new THREE.Group();
@@ -62,8 +65,12 @@ alienEyeR.position.set(1, 0.8, 2.1);
 alienEyeR.rotation.z = 0.2;
 const alienMouth = new THREE.Mesh(new THREE.CircleGeometry(0.3, 16), new THREE.MeshBasicMaterial({color: 0x000000}));
 alienMouth.position.set(0, -1.2, 2.25);
-alienGroup.add(alienHead, alienEyeL, alienEyeR, alienMouth);
-avatars.alien = { root: alienGroup, mouth: alienMouth, eyeL: alienEyeL, eyeR: alienEyeR };
+const alienHandL = new THREE.Mesh(new THREE.SphereGeometry(1.2, 32, 32), new THREE.MeshStandardMaterial({color: 0x22ff44, roughness: 0.4}));
+const alienHandR = new THREE.Mesh(new THREE.SphereGeometry(1.2, 32, 32), new THREE.MeshStandardMaterial({color: 0x22ff44, roughness: 0.4}));
+alienHandL.scale.set(1, 1.5, 0.5);
+alienHandR.scale.set(1, 1.5, 0.5);
+alienGroup.add(alienHead, alienEyeL, alienEyeR, alienMouth, alienHandL, alienHandR);
+avatars.alien = { root: alienGroup, mouth: alienMouth, eyeL: alienEyeL, eyeR: alienEyeR, handL: alienHandL, handR: alienHandR };
 
 // 3. Ghost
 const ghostGroup = new THREE.Group();
@@ -79,8 +86,18 @@ ghostEyeR.position.set(0.8, 0.5, 1.3);
 const ghostMouth = new THREE.Mesh(new THREE.SphereGeometry(0.3), new THREE.MeshBasicMaterial({color: 0x001133}));
 ghostMouth.position.set(0, -0.8, 1.6);
 ghostMouth.scale.set(2, 0.5, 1);
-ghostGroup.add(ghostHead, ghostEyeL, ghostEyeR, ghostMouth);
-avatars.ghost = { root: ghostGroup, mouth: ghostMouth, eyeL: ghostEyeL, eyeR: ghostEyeR };
+const ghostHandL = new THREE.Mesh(new THREE.SphereGeometry(0.8), new THREE.MeshStandardMaterial({color: 0xffffff, transparent: true, opacity: 0.6}));
+const ghostHandR = new THREE.Mesh(new THREE.SphereGeometry(0.8), new THREE.MeshStandardMaterial({color: 0xffffff, transparent: true, opacity: 0.6}));
+ghostHandL.scale.set(1, 0.5, 1);
+ghostHandR.scale.set(1, 0.5, 1);
+ghostGroup.add(ghostHead, ghostEyeL, ghostEyeR, ghostMouth, ghostHandL, ghostHandR);
+avatars.ghost = { root: ghostGroup, mouth: ghostMouth, eyeL: ghostEyeL, eyeR: ghostEyeR, handL: ghostHandL, handR: ghostHandR };
+
+// Initialize hands to be hidden by default
+Object.values(avatars).forEach(avatar => {
+    if (avatar.handL) avatar.handL.visible = false;
+    if (avatar.handR) avatar.handR.visible = false;
+});
 
 let currentAvatar = avatars.robot;
 scene.add(currentAvatar.root);
@@ -119,6 +136,16 @@ async function setupMediaPipe() {
         runningMode: runningMode,
         numFaces: 1
     });
+    
+    handLandmarker = await HandLandmarker.createFromOptions(filesetResolver, {
+        baseOptions: {
+            modelAssetPath: `https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task`,
+            delegate: "GPU"
+        },
+        runningMode: runningMode,
+        numHands: 2
+    });
+
     statusTxt.innerText = "Model loaded. Ready!";
     statusTxt.style.color = "#00ffcc";
     startBtn.disabled = false;
@@ -238,6 +265,40 @@ function predictWebcam() {
         if (currentAvatar.eyeR) {
             currentAvatar.eyeR.scale.y = Math.max(0.1, 1 - (eyeBlinkR * 1.5));
         }
+        }
+        
+        // --- Hand Tracking ---
+        const handResults = handLandmarker.detectForVideo(video, performance.now());
+        
+        if (currentAvatar.handL) currentAvatar.handL.visible = false;
+        if (currentAvatar.handR) currentAvatar.handR.visible = false;
+
+        if (handResults.landmarks && handResults.landmarks.length > 0) {
+            for (let i = 0; i < handResults.landmarks.length; i++) {
+                const landmarks = handResults.landmarks[i];
+                const handedness = handResults.handednesses[i][0].categoryName; // "Left" or "Right"
+                
+                // Use index 9 (Middle Finger MCP) as the center of the hand
+                const lm = landmarks[9];
+                
+                // Map to ThreeJS space
+                const x = -(lm.x - 0.5) * 40;
+                const y = -(lm.y - 0.5) * 30;
+                const z = -lm.z * 50;
+
+                // Match mirrored hands
+                if (handedness === "Left") { 
+                    if (currentAvatar.handR) {
+                       currentAvatar.handR.position.set(x, y, z);
+                       currentAvatar.handR.visible = true;
+                    }
+                } else {
+                    if (currentAvatar.handL) {
+                       currentAvatar.handL.position.set(x, y, z);
+                       currentAvatar.handL.visible = true;
+                    }
+                }
+            }
         }
     } catch(e) {
         // Handle error quietly after reporting once
