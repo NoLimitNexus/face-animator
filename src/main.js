@@ -45,8 +45,14 @@ const botMouth = new THREE.Mesh(new THREE.PlaneGeometry(2, 0.2), new THREE.MeshB
 botMouthGroup.add(botMouth);
 const botHandL = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.5, 1.5), new THREE.MeshStandardMaterial({color: 0x888888, metalness: 0.8, roughness: 0.2}));
 const botHandR = new THREE.Mesh(new THREE.BoxGeometry(1.5, 1.5, 1.5), new THREE.MeshStandardMaterial({color: 0x888888, metalness: 0.8, roughness: 0.2}));
-robotGroup.add(botHead, botEyeL, botEyeR, botMouthGroup, botHandL, botHandR);
-avatars.robot = { root: robotGroup, mouth: botMouth, eyeL: botEyeL, eyeR: botEyeR, handL: botHandL, handR: botHandR };
+const botBrowL = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.2, 0.2), new THREE.MeshBasicMaterial({color: 0x222222}));
+botBrowL.position.set(-1, 1.2, 2.05);
+botBrowL.userData.baseY = 1.2;
+const botBrowR = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.2, 0.2), new THREE.MeshBasicMaterial({color: 0x222222}));
+botBrowR.position.set(1, 1.2, 2.05);
+botBrowR.userData.baseY = 1.2;
+robotGroup.add(botHead, botEyeL, botEyeR, botMouthGroup, botHandL, botHandR, botBrowL, botBrowR);
+avatars.robot = { root: robotGroup, mouth: botMouth, eyeL: botEyeL, eyeR: botEyeR, handL: botHandL, handR: botHandR, browL: botBrowL, browR: botBrowR };
 
 // 2. Alien
 const alienGroup = new THREE.Group();
@@ -69,8 +75,15 @@ const alienHandL = new THREE.Mesh(new THREE.SphereGeometry(1.2, 32, 32), new THR
 const alienHandR = new THREE.Mesh(new THREE.SphereGeometry(1.2, 32, 32), new THREE.MeshStandardMaterial({color: 0x22ff44, roughness: 0.4}));
 alienHandL.scale.set(1, 1.5, 0.5);
 alienHandR.scale.set(1, 1.5, 0.5);
-alienGroup.add(alienHead, alienEyeL, alienEyeR, alienMouth, alienHandL, alienHandR);
-avatars.alien = { root: alienGroup, mouth: alienMouth, eyeL: alienEyeL, eyeR: alienEyeR, handL: alienHandL, handR: alienHandR };
+const alienBrowMat = new THREE.MeshBasicMaterial({color: 0x004400});
+const alienBrowL = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.2, 0.3), alienBrowMat);
+alienBrowL.position.set(-1, 1.8, 2.1);
+alienBrowL.userData.baseY = 1.8;
+const alienBrowR = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.2, 0.3), alienBrowMat);
+alienBrowR.position.set(1, 1.8, 2.1);
+alienBrowR.userData.baseY = 1.8;
+alienGroup.add(alienHead, alienEyeL, alienEyeR, alienMouth, alienHandL, alienHandR, alienBrowL, alienBrowR);
+avatars.alien = { root: alienGroup, mouth: alienMouth, eyeL: alienEyeL, eyeR: alienEyeR, handL: alienHandL, handR: alienHandR, browL: alienBrowL, browR: alienBrowR };
 
 // 3. Ghost
 const ghostGroup = new THREE.Group();
@@ -114,6 +127,12 @@ window.addEventListener('resize', () => {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// Added scroll to zoom in/out
+window.addEventListener('wheel', (e) => {
+    camera.position.z += Math.sign(e.deltaY) * 2;
+    camera.position.z = Math.max(5, Math.min(100, camera.position.z));
 });
 
 // For rendering fallback when camera not started
@@ -212,15 +231,14 @@ function updateAvatarTransform(matrixData) {
   m.decompose(tr, quat, sc);
 
   // Apply rotation
-  // We need to mirror/correct axes for ThreeJS (y up, z toward camera)
+  // Invert axes so movements are not backwards
   const euler = new THREE.Euler().setFromQuaternion(quat);
-  // Mirror rotation on Y and Z
-  currentAvatar.root.rotation.set(euler.x, -euler.y, -euler.z);
+  currentAvatar.root.rotation.set(-euler.x, euler.y, euler.z);
 
-  // Update position (adjust scaling as needed so it fits screen)
+  // Update position (invert X and Y to not be backward)
   // Mediapipe returns cm or normalized coordinates. Multiply to scale the movement.
-  currentAvatar.root.position.x = tr.x * 0.2;
-  currentAvatar.root.position.y = -tr.y * 0.2;
+  currentAvatar.root.position.x = -tr.x * 0.2;
+  currentAvatar.root.position.y = tr.y * 0.2;
 }
 
 function predictWebcam() {
@@ -245,25 +263,50 @@ function predictWebcam() {
         if (results.faceBlendshapes && results.faceBlendshapes.length > 0) {
         const shapes = results.faceBlendshapes[0].categories;
         
-        // jawOpen (0 to 1) -> maps to mouth scale
         const jawOpen = shapes.find(s => s.categoryName === "jawOpen")?.score || 0;
-        // eyeBlinkLeft maps to Right eye on avatar (mirrored)
         const eyeBlinkL = shapes.find(s => s.categoryName === "eyeBlinkLeft")?.score || 0;
-        // eyeBlinkRight maps to Left eye on avatar
         const eyeBlinkR = shapes.find(s => s.categoryName === "eyeBlinkRight")?.score || 0;
+        const smileL = shapes.find(s => s.categoryName === "mouthSmileLeft")?.score || 0;
+        const smileR = shapes.find(s => s.categoryName === "mouthSmileRight")?.score || 0;
+        const frownL = shapes.find(s => s.categoryName === "mouthFrownLeft")?.score || 0;
+        const frownR = shapes.find(s => s.categoryName === "mouthFrownRight")?.score || 0;
         
-        // Mouth animation
+        const browInnerUp = shapes.find(s => s.categoryName === "browInnerUp")?.score || 0;
+        const browOuterUpL = shapes.find(s => s.categoryName === "browOuterUpLeft")?.score || 0;
+        const browOuterUpR = shapes.find(s => s.categoryName === "browOuterUpRight")?.score || 0;
+        const browDownL = shapes.find(s => s.categoryName === "browDownLeft")?.score || 0;
+        const browDownR = shapes.find(s => s.categoryName === "browDownRight")?.score || 0;
+        
+        // Expressions & Mouth
         if (currentAvatar.mouth) {
-            // Base scale is 1, max is roughly 5
             currentAvatar.mouth.scale.y = 1 + (jawOpen * 6);
+            
+            // Apply smiles and frowns via width
+            const smile = smileL + smileR;
+            const frown = frownL + frownR;
+            currentAvatar.mouth.scale.x = 1 + (smile * 1.5) - (frown * 0.5);
+            
+            // Frowning usually droops the mouth down too
+            if (frown > 0.5) currentAvatar.mouth.position.y -= frown * 0.05;
+        }
+        
+        // Brows
+        if (currentAvatar.browL) {
+            // Mirror left and right in camera logic
+            currentAvatar.browL.position.y = currentAvatar.browL.userData.baseY + (browInnerUp * 0.3) + (browOuterUpR * 0.2) - (browDownR * 0.4);
+            currentAvatar.browL.rotation.z = (browDownR * 0.4) - (browOuterUpR * 0.2);
+        }
+        if (currentAvatar.browR) {
+            currentAvatar.browR.position.y = currentAvatar.browR.userData.baseY + (browInnerUp * 0.3) + (browOuterUpL * 0.2) - (browDownL * 0.4);
+            currentAvatar.browR.rotation.z = -(browDownL * 0.4) + (browOuterUpL * 0.2);
         }
         
         // Eye blinking
         if (currentAvatar.eyeL) {
-            currentAvatar.eyeL.scale.y = Math.max(0.1, 1 - (eyeBlinkL * 1.5));
+            currentAvatar.eyeL.scale.y = Math.max(0.1, 1 - (eyeBlinkR * 1.5));
         }
         if (currentAvatar.eyeR) {
-            currentAvatar.eyeR.scale.y = Math.max(0.1, 1 - (eyeBlinkR * 1.5));
+            currentAvatar.eyeR.scale.y = Math.max(0.1, 1 - (eyeBlinkL * 1.5));
         }
         }
         
@@ -281,9 +324,10 @@ function predictWebcam() {
                 // Use index 9 (Middle Finger MCP) as the center of the hand
                 const lm = landmarks[9];
                 
-                // Map to ThreeJS space
-                const x = -(lm.x - 0.5) * 40;
-                const y = -(lm.y - 0.5) * 30;
+                // Map to ThreeJS space (invert axes to fix backward direction)
+                const x = (lm.x - 0.5) * 40;
+                const y = (lm.y - 0.5) * 30;
+                // keep z relative naturally
                 const z = -lm.z * 50;
 
                 // Match mirrored hands
