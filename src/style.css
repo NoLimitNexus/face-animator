@@ -171,3 +171,25 @@ select option {
   transform: scaleX(-1);
   pointer-events: none;
 }
+
+@media (max-width: 768px) {
+  .ui-container {
+    top: 1rem;
+    left: 1rem;
+    right: 1rem;
+    align-items: center;
+  }
+  .glass-title {
+    font-size: 2rem;
+  }
+  .controls {
+    width: 100%;
+    min-width: 0;
+  }
+  .video-container {
+    bottom: 1rem;
+    right: 1rem;
+    width: 160px;
+    height: 120px;
+  }
+}

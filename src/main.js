@@ -158,7 +158,7 @@ function enableCam(event) {
     startBtn.innerText = "Stop Camera";
     statusTxt.innerText = "Camera active. Try moving your face and opening your mouth.";
     
-    navigator.mediaDevices.getUserMedia({ video: true }).then((stream) => {
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: "user" } }).then((stream) => {
       video.srcObject = stream;
       video.addEventListener("loadeddata", () => {
          requestAnimationFrame(predictWebcam);
