@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Face Animator</title>
+  </head>
+  <body>
+    <div id="app">
+      <div class="ui-container">
+        <h1 class="glass-title">Face Animator Pro</h1>
+        <div class="controls glass-panel">
+          <label for="avatar-select">Choose Avatar:</label>
+          <select id="avatar-select">
+            <option value="robot">Robo-Box</option>
+            <option value="alien">Neon Alien</option>
+            <option value="ghost">Ethereal Ghost</option>
+          </select>
+          <button id="start-btn" class="primary-btn">Start Camera</button>
+        </div>
+        <div id="status" class="status-msg">Initializing models...</div>
+      </div>
+      
+      <div class="video-container glass-panel">
+        <video id="webcam" autoplay playsinline></video>
+        <canvas id="output_canvas" class="output_canvas"></canvas>
+      </div>
+
+      <div id="canvas-container"></div>
+    </div>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
