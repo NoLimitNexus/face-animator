@@ -302,7 +302,8 @@ function predictWebcam() {
             const smileFactor = Math.min(3.0, smile * 2.5);
             const frownFactor = Math.min(1.0, frown * 1.5);
             
-            currentAvatar.mouth.scale.x = 1 + smileFactor - (frownFactor * 0.5);
+            const targetX = 1 + smileFactor - (frownFactor * 0.5);
+            currentAvatar.mouth.scale.x = Math.min(2.0, targetX); // Max width limit
             
             // Smile pulls mouth up, frown pulls mouth down
             currentAvatar.mouth.position.y = currentAvatar.mouth.userData.baseY + (smileFactor * 0.15) - (frownFactor * 0.1);
@@ -311,12 +312,14 @@ function predictWebcam() {
         // Brows
         if (currentAvatar.browL) {
             // Mirror left and right in camera logic
-            currentAvatar.browL.position.y = currentAvatar.browL.userData.baseY + (browInnerUp * 0.25) + (browOuterUpR * 0.2) - (browDownR * 0.4);
-            currentAvatar.browL.rotation.z = (browDownR * 0.5) - (browOuterUpR * 0.3) - (smileL * 0.2); // Smoothly relax brow when smiling
+            const liftL = Math.max(browInnerUp * 0.3, browOuterUpR * 0.7);
+            currentAvatar.browL.position.y = currentAvatar.browL.userData.baseY + liftL - (browDownR * 0.4);
+            currentAvatar.browL.rotation.z = (browDownR * 0.5) - (browOuterUpR * 0.4) - (smileL * 0.2); // Smoothly relax brow when smiling
         }
         if (currentAvatar.browR) {
-            currentAvatar.browR.position.y = currentAvatar.browR.userData.baseY + (browInnerUp * 0.25) + (browOuterUpL * 0.2) - (browDownL * 0.4);
-            currentAvatar.browR.rotation.z = -(browDownL * 0.5) + (browOuterUpL * 0.3) + (smileR * 0.2); // Smoothly relax brow when smiling
+            const liftR = Math.max(browInnerUp * 0.3, browOuterUpL * 0.7);
+            currentAvatar.browR.position.y = currentAvatar.browR.userData.baseY + liftR - (browDownL * 0.4);
+            currentAvatar.browR.rotation.z = -(browDownL * 0.5) + (browOuterUpL * 0.4) + (smileR * 0.2); // Smoothly relax brow when smiling
         }
         
         // Eye blinking
