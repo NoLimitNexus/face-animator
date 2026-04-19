@@ -263,42 +263,60 @@ function predictWebcam() {
         if (results.faceBlendshapes && results.faceBlendshapes.length > 0) {
         const shapes = results.faceBlendshapes[0].categories;
         
-        const jawOpen = shapes.find(s => s.categoryName === "jawOpen")?.score || 0;
+        // Jaw
+        const jawOpenRaw = shapes.find(s => s.categoryName === "jawOpen")?.score || 0;
+        const jawOpen = jawOpenRaw > 0.05 ? jawOpenRaw : 0;
+        
         const eyeBlinkL = shapes.find(s => s.categoryName === "eyeBlinkLeft")?.score || 0;
         const eyeBlinkR = shapes.find(s => s.categoryName === "eyeBlinkRight")?.score || 0;
+        
+        // Smile/Frown
         const smileL = shapes.find(s => s.categoryName === "mouthSmileLeft")?.score || 0;
         const smileR = shapes.find(s => s.categoryName === "mouthSmileRight")?.score || 0;
         const frownL = shapes.find(s => s.categoryName === "mouthFrownLeft")?.score || 0;
         const frownR = shapes.find(s => s.categoryName === "mouthFrownRight")?.score || 0;
         
-        const browInnerUp = shapes.find(s => s.categoryName === "browInnerUp")?.score || 0;
-        const browOuterUpL = shapes.find(s => s.categoryName === "browOuterUpLeft")?.score || 0;
-        const browOuterUpR = shapes.find(s => s.categoryName === "browOuterUpRight")?.score || 0;
-        const browDownL = shapes.find(s => s.categoryName === "browDownLeft")?.score || 0;
-        const browDownR = shapes.find(s => s.categoryName === "browDownRight")?.score || 0;
+        // Brows with deadzones to stop "terrified/angry" resting face
+        const threshold = (val, t) => val > t ? (val - t) * (1 / (1 - t)) : 0;
+        const browInnerUp = threshold(shapes.find(s => s.categoryName === "browInnerUp")?.score || 0, 0.15);
+        const browOuterUpL = threshold(shapes.find(s => s.categoryName === "browOuterUpLeft")?.score || 0, 0.15);
+        const browOuterUpR = threshold(shapes.find(s => s.categoryName === "browOuterUpRight")?.score || 0, 0.15);
+        // Requires more extreme muscle to register as angry
+        const browDownL = threshold(shapes.find(s => s.categoryName === "browDownLeft")?.score || 0, 0.25);
+        const browDownR = threshold(shapes.find(s => s.categoryName === "browDownRight")?.score || 0, 0.25);
         
         // Expressions & Mouth
         if (currentAvatar.mouth) {
+            // Set base Y if not set
+            if (currentAvatar.mouth.userData.baseY === undefined) {
+               currentAvatar.mouth.userData.baseY = currentAvatar.mouth.position.y;
+            }
+            
             currentAvatar.mouth.scale.y = 1 + (jawOpen * 6);
             
-            // Apply smiles and frowns via width
+            // Apply smiles and frowns via width and Y position
             const smile = smileL + smileR;
             const frown = frownL + frownR;
-            currentAvatar.mouth.scale.x = 1 + (smile * 1.5) - (frown * 0.5);
             
-            // Frowning usually droops the mouth down too
-            if (frown > 0.5) currentAvatar.mouth.position.y -= frown * 0.05;
+            // Amplify smile drastically so it's easier to hit
+            const smileFactor = Math.min(3.0, smile * 2.5);
+            const frownFactor = Math.min(1.0, frown * 1.5);
+            
+            currentAvatar.mouth.scale.x = 1 + smileFactor - (frownFactor * 0.5);
+            
+            // Smile pulls mouth up, frown pulls mouth down
+            currentAvatar.mouth.position.y = currentAvatar.mouth.userData.baseY + (smileFactor * 0.15) - (frownFactor * 0.1);
         }
         
         // Brows
         if (currentAvatar.browL) {
             // Mirror left and right in camera logic
-            currentAvatar.browL.position.y = currentAvatar.browL.userData.baseY + (browInnerUp * 0.3) + (browOuterUpR * 0.2) - (browDownR * 0.4);
-            currentAvatar.browL.rotation.z = (browDownR * 0.4) - (browOuterUpR * 0.2);
+            currentAvatar.browL.position.y = currentAvatar.browL.userData.baseY + (browInnerUp * 0.25) + (browOuterUpR * 0.2) - (browDownR * 0.4);
+            currentAvatar.browL.rotation.z = (browDownR * 0.5) - (browOuterUpR * 0.3) - (smileL * 0.2); // Smoothly relax brow when smiling
         }
         if (currentAvatar.browR) {
-            currentAvatar.browR.position.y = currentAvatar.browR.userData.baseY + (browInnerUp * 0.3) + (browOuterUpL * 0.2) - (browDownL * 0.4);
-            currentAvatar.browR.rotation.z = -(browDownL * 0.4) + (browOuterUpL * 0.2);
+            currentAvatar.browR.position.y = currentAvatar.browR.userData.baseY + (browInnerUp * 0.25) + (browOuterUpL * 0.2) - (browDownL * 0.4);
+            currentAvatar.browR.rotation.z = -(browDownL * 0.5) + (browOuterUpL * 0.3) + (smileR * 0.2); // Smoothly relax brow when smiling
         }
         
         // Eye blinking
